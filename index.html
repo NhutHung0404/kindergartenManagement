@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Quản Lý Trường Mẫu Giáo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+        input, select, button { padding: 8px; margin: 5px 0; }
+        button { background-color: #27ae60; color: white; border: none; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table, th, td { border: 1px solid #ccc; padding: 8px; }
+    </style>
+</head>
+<body>
+    <h2>Hệ Thống Quản Lý Trường Mẫu Giáo</h2>
+    <div class="section">
+        <h3>1. Lập Danh Sách Trẻ</h3>
+        <input type="text" id="name" placeholder="Họ tên trẻ">
+        <input type="date" id="dob">
+        <select id="gender"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select>
+        <input type="text" id="parent" placeholder="Phụ huynh">
+        <input type="text" id="phone" placeholder="SĐT">
+        <button onclick="addChild()">Thêm Trẻ</button>
+        <div id="add-status"></div>
+        <table>
+            <thead><tr><th>STT</th><th>Họ tên</th><th>Ngày sinh</th><th>Giới tính</th><th>Phụ huynh</th><th>SĐT</th></tr></thead>
+            <tbody id="children-table"></tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h3>2. Ghi Nhận Sức Khỏe Hàng Ngày</h3>
+        <input type="number" id="child_id" placeholder="ID Trẻ">
+        <input type="number" id="temp" placeholder="Nhiệt độ (°C)" step="0.1">
+        <button onclick="recordHealth()">Ghi Nhận</button>
+        <div id="health-status"></div>
+    </div>
+
+    <div class="section">
+        <h3>3. Thu Học Phí</h3>
+        <input type="number" id="tuition_child_id" placeholder="ID Trẻ">
+        <input type="number" id="meal_days" placeholder="Số ngày ăn">
+        <button onclick="calculateTuition()">Tính Hóa Đơn</button>
+        <div id="invoice-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>4. Thống Kê - Báo Cáo</h3>
+        <p id="stat-info"></p>
+        <div style="width: 250px;"><canvas id="genderChart"></canvas></div>
+    </div>
+
+    <script>
+        let myChart = null;
+        window.onload = function() { loadChildren(); loadStats(); };
+
+        function loadChildren() {
+            fetch('/api/children').then(r => r.json()).then(data => {
+                const tbody = document.getElementById('children-table');
+                tbody.innerHTML = '';
+                data.children.forEach(c => {
+                    tbody.innerHTML += `<tr><td>${c.id}</td><td>${c.name}</td><td>${c.dob}</td><td>${c.gender}</td><td>${c.parent}</td><td>${c.phone}</td></tr>`;
+                });
+                loadStats();
+            });
+        }
+
+        function addChild() {
+            const childData = {
+                name: document.getElementById('name').value,
+                dob: document.getElementById('dob').value,
+                gender: document.getElementById('gender').value,
+                parent: document.getElementById('parent').value,
+                phone: document.getElementById('phone').value
+            };
+            fetch('/api/children', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(childData) })
+            .then(r => r.json()).then(data => {
+                document.getElementById('add-status').innerText = data.message;
+                if(data.success) loadChildren();
+            });
+        }
+
+        function recordHealth() {
+            fetch('/api/health', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ child_id: document.getElementById('child_id').value, temperature: document.getElementById('temp').value })
+            }).then(r => r.json()).then(data => {
+                document.getElementById('health-status').innerText = data.message;
+            });
+        }
+
+        function calculateTuition() {
+            fetch('/api/tuition/calculate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ child_id: document.getElementById('tuition_child_id').value, meal_days: document.getElementById('meal_days').value })
+            }).then(r => r.json()).then(data => {
+                if(data.success) {
+                    const inv = data.invoice;
+                    document.getElementById('invoice-result').innerHTML = `Học sinh: ${inv.child_name} | Học phí: ${inv.base_tuition.toLocaleString()} VNĐ | Tiền ăn: ${inv.total_meal_fee.toLocaleString()} VNĐ | <b>Tổng: ${inv.total_amount.toLocaleString()} VNĐ</b>`;
+                }
+            });
+        }
+
+        function loadStats() {
+            fetch('/api/stats').then(r => r.json()).then(data => {
+                document.getElementById('stat-info').innerText = `Sĩ số: ${data.total_students}/${data.max_capacity}`;
+                const ctx = document.getElementById('genderChart').getContext('2d');
+                if (myChart) myChart.destroy();
+                myChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: { labels: ['Nam', 'Nữ'], datasets: [{ data: [data.male_count, data.female_count], backgroundColor: ['#36A2EB', '#FF6384'] }] }
+                });
+            });
+        }
+    </script>
+</body>
+</html>
